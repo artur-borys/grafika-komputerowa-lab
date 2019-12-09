@@ -6,7 +6,7 @@
 
 using namespace std;
 
-#define N   100
+#define N   25
 
 typedef float point3[3];
 
@@ -17,11 +17,20 @@ static GLfloat theta = 0.0;
 static GLfloat phi = 0.0;
 static GLfloat theta_o = 0.0;
 static GLfloat phi_o = 0.0;
+static GLfloat angles_L0[] = {0.0, 0.0};
+static GLfloat angles_L1[] = {0.0, 0.0};
 static GLfloat zoom = 1.0;
 static GLfloat pix2angle;
 static GLint status = 0;
 static GLfloat R = 10.0;
 static GLfloat upY = 1.0;
+static GLfloat light0_position[] = {10.0, 0.0, -10.0, 1.0};
+static GLfloat light1_position[] = {0.0, 10.0, 10.0, 1.0};
+static GLfloat light0_colors[] = {0.0, 0.0, 1.0, 1.0}; 
+static GLfloat light1_colors[] = {1.0, 0.0, 0.0, 1.0};
+static bool light0_colors_dir[] = {0, 0, 1};
+static bool light1_colors_dir[] = {1, 0, 0};
+static bool mouse_moved = false;
 
 static int x_pos_old = 0;
 static int y_pos_old = 0;
@@ -42,6 +51,18 @@ float y_s() {
 
 float z_s() {
     return (GLfloat)R*sin(theta*M_PI)*cos(phi*M_PI);
+}
+
+float xl_s(GLfloat *ang, GLfloat base) {
+    return (GLfloat)10.0*cos(ang[0]*M_PI)*cos(ang[1]*M_PI) + base;
+}
+
+float yl_s(GLfloat *ang, GLfloat base) {
+    return (GLfloat)10.0*sin(ang[1]*M_PI) + base;
+}
+
+float zl_s(GLfloat *ang, GLfloat base) {
+    return (GLfloat)10.0*sin(ang[0]*M_PI)*cos(ang[1]*M_PI) + base;
 }
 
 GLfloat xuv(double u, double v) {
@@ -99,6 +120,7 @@ void Motion(GLsizei x, GLsizei y) {
     x_pos_old = x;
     y_pos_old = y;
     z_pos_old = x;
+    mouse_moved = 1;
     glutPostRedisplay();
 }
 
@@ -109,6 +131,9 @@ void Keyboard(unsigned char key, int x, int y) {
             break;
         case 'm':
             controlMode = (controlMode == 2) ? 0 : 2;
+            break;
+        case 'c':
+            controlMode = (controlMode == 3) ? 0 : 3;
             break;
     }
 }
@@ -221,6 +246,29 @@ void drawEgg(vector<vector<GLfloat>> egg, vector<vector<GLfloat>> eggNormal) {
     
 }
 
+void changeColors() {
+    for(int i = 0; i < 3; i++) {
+        GLfloat step0 = (light0_colors_dir[i] == 1) ? -0.005 : 0.005;
+        GLfloat step1 = (light1_colors_dir[i] == 1) ? -0.005 : 0.005;
+        light0_colors[i] += step0;
+        light1_colors[i] += step1;
+        if(light0_colors[i] >= 0.995) {
+            light0_colors_dir[i] = 1;
+        } else if(light0_colors[i] <= 0.05) {
+            light0_colors_dir[i] = 0;
+        }
+        if(light1_colors[i] >= 0.995) {
+            light1_colors_dir[i] = 1;
+        } else if(light1_colors[i] <= 0.05) {
+            light1_colors_dir[i] = 0;
+        }
+        std::cout << light0_colors[i] << std::endl;
+        std::cout << light1_colors[i] << std::endl;
+    }
+    mouse_moved = 0;
+    glutPostRedisplay();
+}
+
 void RenderScene()
 {
 
@@ -234,10 +282,19 @@ void RenderScene()
 
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    if(controlMode == 1) {
+    if(mouse_moved) {
+        if(controlMode == 1 || controlMode == 3) {
         if(status == 1) {
-            theta += delta_x*pix2angle/25;
-            phi += delta_y*pix2angle/25;
+            if(controlMode == 1) {
+                theta += delta_x*pix2angle/25;
+                phi += delta_y*pix2angle/25;
+            } else {
+                angles_L0[0] += delta_x*pix2angle/25;
+                angles_L1[0] += delta_x*pix2angle/25;
+                angles_L0[1] += delta_y*pix2angle/25;
+                angles_L1[1] += delta_y*pix2angle/25;
+            }
+            
         } else if(status == 2) {
             R -= delta_z*0.05;
             if(R < 5.0) {
@@ -250,19 +307,31 @@ void RenderScene()
         theta = fmod(theta, M_PI*2);
         phi = fmod(phi, M_PI*2);
 
-        viewer[0] = x_s();
-        viewer[1] = y_s();
-        viewer[2] = z_s();
-
-        GLfloat phiRad = fmod(phi*M_PI, M_PI*2);
-        if(
-            (phiRad > M_PI/2 && phiRad < M_PI*3/2) ||
-            (phiRad > (-1)*M_PI*3/2 && phiRad < (-1)*M_PI/2)
+        if(controlMode == 3) {
+            light0_position[0] = xl_s(angles_L0, 10.0);
+            light1_position[0] = xl_s(angles_L1, 0.0);
+            light0_position[1] = yl_s(angles_L0, 0.0);
+            light1_position[1] = yl_s(angles_L1, 10.0);
+            light0_position[2] = zl_s(angles_L0, -10.0);
+            light1_position[2] = zl_s(angles_L1, 10.0);
+        }
         
-        ) {
-            upY = -1.0;
-        } else {
-            upY = 1.0;
+
+        
+        if(controlMode == 1) {
+            viewer[0] = x_s();
+            viewer[1] = y_s();
+            viewer[2] = z_s();
+            GLfloat phiRad = fmod(phi*M_PI, M_PI*2);
+            if(
+                (phiRad > M_PI/2 && phiRad < M_PI*3/2) ||
+                (phiRad > (-1)*M_PI*3/2 && phiRad < (-1)*M_PI/2)
+            
+            ) {
+                upY = -1.0;
+            } else {
+                upY = 1.0;
+            }
         }
     } else if(controlMode == 2) {
         if(status == 1) {
@@ -281,6 +350,10 @@ void RenderScene()
         
     }
 
+    }
+    
+    glPushMatrix();
+
     glRotatef(theta_o, 0.0, 1.0, 0.0);
     glRotatef(phi_o, 1.0, 0.0, 0.0);
     glScalef(zoom, zoom, zoom);
@@ -288,6 +361,15 @@ void RenderScene()
     //glutSolidTeapot(3.0);
 
     drawEgg(createEgg(), createEggNormal());
+
+    glPopMatrix();
+
+    glLightfv(GL_LIGHT0, GL_POSITION, light0_position);
+    glLightfv(GL_LIGHT1, GL_POSITION, light1_position);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_colors);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light0_colors);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colors);
+    glLightfv(GL_LIGHT1, GL_SPECULAR, light1_colors);
 
     glFlush();
 
@@ -316,25 +398,22 @@ void MyInit() {
     GLfloat mat_specular[] = {1.0, 1.0, 1.0, 1.0};
     // współczynniki ks =[ksr,ksg,ksb] dla światła odbitego               
    
-    GLfloat mat_shininess  = {20.0};
+    GLfloat mat_shininess  = {50.0};
     // współczynnik n opisujący połysk powierzchni
 
 /*************************************************************************************/
 // Definicja źródła światła
-
-     GLfloat light_position[] = {0.0, 0.0, 10.0, 1.0};   
-    // położenie źródła
 
 
     GLfloat light_ambient[] = {0.1, 0.1, 0.1, 1.0};
     // składowe intensywności świecenia źródła światła otoczenia
     // Ia = [Iar,Iag,Iab]
 
-    GLfloat light_diffuse[] = {1.0, 1.0, 1.0, 1.0};       
+    GLfloat light_diffuse[] = {};      
     // składowe intensywności świecenia źródła światła powodującego
     // odbicie dyfuzyjne Id = [Idr,Idg,Idb]
 
-    GLfloat light_specular[]= {1.0, 1.0, 1.0, 1.0};
+    GLfloat light_specular[]= {0.0, 0.0, 1.0, 1.0};
     // składowe intensywności świecenia źródła światła powodującego
     // odbicie kierunkowe Is = [Isr,Isg,Isb]
 
@@ -347,6 +426,31 @@ void MyInit() {
     // odległości od źródła
 
     GLfloat att_quadratic  = {0.001};
+    // składowa kwadratowa dq dla modelu zmian oświetlenia w funkcji
+    // odległości od źródła
+
+
+    GLfloat light_ambient2[] = {0.1, 0.1, 0.1, 1.0};
+    // składowe intensywności świecenia źródła światła otoczenia
+    // Ia = [Iar,Iag,Iab]
+
+    GLfloat light_diffuse2[] = {1.0, 0.25, 0.0, 1.0};       
+    // składowe intensywności świecenia źródła światła powodującego
+    // odbicie dyfuzyjne Id = [Idr,Idg,Idb]
+
+    GLfloat light_specular2[]= {1.0, 0.25, 0.0, 1.0};
+    // składowe intensywności świecenia źródła światła powodującego
+    // odbicie kierunkowe Is = [Isr,Isg,Isb]
+
+    GLfloat att_constant2  = {1.0};
+    // składowa stała ds dla modelu zmian oświetlenia w funkcji
+    // odległości od źródła
+
+    GLfloat att_linear2    = {0.05};
+    // składowa liniowa dl dla modelu zmian oświetlenia w funkcji
+    // odległości od źródła
+
+    GLfloat att_quadratic2  = {0.001};
     // składowa kwadratowa dq dla modelu zmian oświetlenia w funkcji
     // odległości od źródła
 
@@ -366,13 +470,22 @@ void MyInit() {
 // Ustawienie parametrów źródła
 
     glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
-    glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_colors);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light0_colors);
+    glLightfv(GL_LIGHT0, GL_POSITION, light0_position);
 
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, att_constant);
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, att_linear);
     glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, att_quadratic);
+
+    glLightfv(GL_LIGHT1, GL_AMBIENT, light_ambient2);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colors);
+    glLightfv(GL_LIGHT1, GL_SPECULAR, light1_colors);
+    glLightfv(GL_LIGHT1, GL_POSITION, light1_position);
+
+    glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, att_constant2);
+    glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, att_linear2);
+    glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, att_quadratic2);
 
 
 /*************************************************************************************/
@@ -381,6 +494,7 @@ void MyInit() {
     glShadeModel(GL_SMOOTH); // właczenie łagodnego cieniowania
     glEnable(GL_LIGHTING);   // właczenie systemu oświetlenia sceny
     glEnable(GL_LIGHT0);     // włączenie źródła o numerze 0
+    glEnable(GL_LIGHT1);
     glEnable(GL_DEPTH_TEST); // włączenie mechanizmu z-bufora
 
 /*************************************************************************************/
@@ -417,6 +531,7 @@ int main(int argc, char *argv[])
     glutMouseFunc(Mouse);
     glutMotionFunc(Motion);
     glutKeyboardFunc(Keyboard);
+    glutIdleFunc(changeColors);
 
     MyInit();
 
