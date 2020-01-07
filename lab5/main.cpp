@@ -9,6 +9,7 @@ using namespace std;
 #define N   50
 
 typedef float point3[3];
+typedef float vec[3];
 
 static GLfloat viewer[] = {20.0, 0.0, 0.0};
 static GLfloat upVector[] = {0.0, 1.0, 0.0};
@@ -25,13 +26,15 @@ static GLint status = 0;
 static GLfloat R = 20.0;
 static GLfloat R_light = 10.0;
 static GLfloat upY = 1.0;
-static GLfloat light0_position[] = {10.0, 0.0, -10.0, 1.0};
+static GLfloat light0_position[] = {7.0, 7.0, 7.0, 1.0};
 static GLfloat light1_position[] = {0.0, 10.0, 10.0, 1.0};
-static GLfloat light0_colors[] = {0.0, 0.0, 1.0, 1.0}; 
+static GLfloat light0_colors[] = {1.0, 1.0, 1.0, 1.0}; 
 static GLfloat light1_colors[] = {1.0, 0.0, 0.0, 1.0};
 static bool light0_colors_dir[] = {0, 0, 1};
 static bool light1_colors_dir[] = {1, 0, 0};
 static bool mouse_moved = false;
+static bool cullEnabled = true;
+static int drawFlag = 0;
 
 static int x_pos_old = 0;
 static int y_pos_old = 0;
@@ -40,7 +43,8 @@ static int delta_x = 0;
 static int delta_y = 0;
 static int delta_z = 0;
 
-static int controlMode = 0;
+static int controlMode = 1;
+static string texture = "tekstura.tga";
 
 float x_s() {
     return (GLfloat)R*cos(theta*M_PI)*cos(phi*M_PI);
@@ -100,6 +104,159 @@ GLfloat zvn(double u, double v) {
     return -M_PI*(90.0*pow(u, 5) - 225.0*pow(u, 4) + 270.0*pow(u, 3) - 180.0*pow(u, 2) + 45.0*u)*cos(M_PI*v);
 }
 
+/*************************************************************************************/
+ // Funkcja wczytuje dane obrazu zapisanego w formacie TGA w pliku o nazwie
+ // FileName, alokuje pamięć i zwraca wskaźnik (pBits) do bufora w którym
+ // umieszczone są dane.
+ // Ponadto udostępnia szerokość (ImWidth), wysokość (ImHeight) obrazu
+ // tekstury oraz dane opisujące format obrazu według specyfikacji OpenGL
+ // (ImComponents) i (ImFormat).
+ // Jest to bardzo uproszczona wersja funkcji wczytującej dane z pliku TGA.
+ // Działa tylko dla obrazów wykorzystujących 8, 24, or 32 bitowy kolor.
+ // Nie obsługuje plików w formacie TGA kodowanych z kompresją RLE.
+/*************************************************************************************/
+
+
+GLbyte *LoadTGAImage(const char *FileName, GLint *ImWidth, GLint *ImHeight, GLint *ImComponents, GLenum *ImFormat)
+{
+
+/*************************************************************************************/
+
+// Struktura dla nagłówka pliku  TGA
+
+
+    #pragma pack(1)           
+    typedef struct                       
+    {
+        GLbyte    idlength;             
+        GLbyte    colormaptype;          
+        GLbyte    datatypecode;            
+        unsigned short    colormapstart; 
+        unsigned short    colormaplength;
+        unsigned char     colormapdepth;  
+        unsigned short    x_orgin;        
+        unsigned short    y_orgin;        
+        unsigned short    width;         
+        unsigned short    height;        
+        GLbyte    bitsperpixel;                  
+        GLbyte    descriptor;            
+    }TGAHEADER;
+    #pragma pack(8)
+
+    FILE *pFile;                   
+    TGAHEADER tgaHeader;           
+    unsigned long lImageSize;       
+    short sDepth;                   
+    GLbyte    *pbitsperpixel = NULL; 
+
+          
+/*************************************************************************************/ 
+
+// Wartości domyślne zwracane w przypadku błędu
+
+    *ImWidth = 0;               
+    *ImHeight = 0;
+    *ImFormat = GL_BGR_EXT;
+    *ImComponents = GL_RGB8;
+   
+    pFile = fopen(FileName, "rb");
+    if(pFile == NULL)
+      return NULL;
+
+/*************************************************************************************/
+// Przeczytanie nagłówka pliku 
+
+
+    fread(&tgaHeader, sizeof(TGAHEADER), 1, pFile);
+                
+
+/*************************************************************************************/
+
+// Odczytanie szerokości, wysokości i głębi obrazu
+
+    *ImWidth = tgaHeader.width;
+    *ImHeight = tgaHeader.height;
+    sDepth = tgaHeader.bitsperpixel / 8;
+
+
+/*************************************************************************************/
+// Sprawdzenie, czy głębia spełnia założone warunki (8, 24, lub 32 bity)
+   
+    if(tgaHeader.bitsperpixel != 8 && tgaHeader.bitsperpixel != 24 && tgaHeader.bitsperpixel != 32)
+        return NULL;
+
+/*************************************************************************************/
+
+// Obliczenie rozmiaru bufora w pamięci
+
+
+    lImageSize = tgaHeader.width * tgaHeader.height * sDepth;
+
+
+/*************************************************************************************/   
+
+// Alokacja pamięci dla danych obrazu
+
+
+     pbitsperpixel = (GLbyte*)malloc(lImageSize * sizeof(GLbyte));
+   
+      if(pbitsperpixel == NULL)
+        return NULL;
+
+    if(fread(pbitsperpixel, lImageSize, 1, pFile) != 1)
+        {
+        free(pbitsperpixel);
+        return NULL;
+        }
+   
+
+/*************************************************************************************/
+
+// Ustawienie formatu OpenGL
+
+
+    switch(sDepth)
+
+        {
+
+        case 3:    
+
+            *ImFormat = GL_BGR_EXT;
+
+            *ImComponents = GL_RGB8;
+
+            break;
+
+        case 4:
+
+            *ImFormat = GL_BGRA_EXT;
+
+            *ImComponents = GL_RGBA8;
+
+            break;
+
+        case 1:
+
+            *ImFormat = GL_LUMINANCE;
+
+            *ImComponents = GL_LUMINANCE8;
+
+            break;
+
+        };
+
+     
+
+    fclose(pFile);
+
+       
+
+    return pbitsperpixel;
+
+}
+
+/*************************************************************************************/ 
+
 void Mouse(int btn, int state, int x, int y) {
     if(btn == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         x_pos_old = x;
@@ -133,8 +290,31 @@ void Keyboard(unsigned char key, int x, int y) {
         case 'm':
             controlMode = (controlMode == 2) ? 0 : 2;
             break;
+        case 't':
+            texture = (texture.compare("tekstura.tga") == 0) ? "tekstura2.tga" : "tekstura.tga";
+            glutSetWindowTitle("Teksturowanie");
+            glutPostRedisplay();
+            break;
         case 'c':
-            controlMode = (controlMode == 3) ? 0 : 3;
+            if(cullEnabled) {
+                glDisable(GL_CULL_FACE);
+            } else {
+                glEnable(GL_CULL_FACE);
+            }
+            cullEnabled = !cullEnabled;
+            glutPostRedisplay();
+            break;
+        case 'k':
+            drawFlag += 1;
+            if(drawFlag >= 3) {
+                drawFlag = 0;
+            }
+            glutPostRedisplay();
+            break;
+        case 'b':
+            texture = "biernat.tga";
+            glutSetWindowTitle("BIERNACENIE");
+            glutPostRedisplay();
             break;
     }
 }
@@ -194,6 +374,24 @@ vector<vector<GLfloat>> createEgg() {
     return egg;
 }
 
+vector<vector<GLfloat>> createEggTexCoords() {
+    vector<vector<GLfloat>> texCoords;
+    for(int i = 0; i < N; i++) {
+        float u = (float)((float)i/(N-1));
+        for(int j = 0; j < N; j++) {
+            float v = (float)((float)j/(N-1));
+            vector<GLfloat> coord = {u, v};
+            if(texCoords.size() > N*N / 2) {
+                coord[0] = 1.0 - coord[0];
+                coord[1] = 1.0 - coord[1];
+            }
+            texCoords.push_back(coord);
+        }
+    }
+
+    return texCoords;
+}
+
 vector<vector<GLfloat>> createEggNormal() {
     vector<vector<GLfloat>> eggNormal;
     for(int i = 0; i < N; i++) {
@@ -224,22 +422,28 @@ vector<vector<GLfloat>> createEggNormal() {
 }
 
 void drawEgg(vector<vector<GLfloat>> egg, vector<vector<GLfloat>> eggNormal) {
+    vector<vector<GLfloat>> texCoords = createEggTexCoords();
     glTranslatef(0.0, -5.0, 0.0);
     for(int i = 0; i < N*N - N - 1; i++) {
         glBegin(GL_TRIANGLE_STRIP);
         glNormal3f(eggNormal[i][0], eggNormal[i][1], eggNormal[i][2]);
+        glTexCoord2f(texCoords[i][0], texCoords[i][1]);
         glVertex3f(egg[i][0], egg[i][1], egg[i][2]);
 
         glNormal3f(eggNormal[i+1][0], eggNormal[i+1][1], eggNormal[i+1][2]);
+        glTexCoord2f(texCoords[i+1][0], texCoords[i+1][1]);
         glVertex3f(egg[i+1][0], egg[i+1][1], egg[i+1][2]);
 
         glNormal3f(eggNormal[i+N][0], eggNormal[i+N][1], eggNormal[i+N][2]);
+        glTexCoord2f(texCoords[i+N][0], texCoords[i+N][1]);
         glVertex3f(egg[i+N][0], egg[i+N][1], egg[i+N][2]);
 
         glNormal3f(eggNormal[i+N+1][0], eggNormal[i+N+1][1], eggNormal[i+N+1][2]);
+        glTexCoord2f(texCoords[i+N+1][0], texCoords[i+N+1][1]);
         glVertex3f(egg[i+N+1][0], egg[i+N+1][1], egg[i+N+1][2]);
 
         glNormal3f(eggNormal[i+2][0], eggNormal[i+2][1], eggNormal[i+2][2]);
+        glTexCoord2f(texCoords[i+2][0], texCoords[i+2][1]);
         glVertex3f(egg[i+2][0], egg[i+2][1], egg[i+2][2]);
 
         glEnd();
@@ -247,29 +451,76 @@ void drawEgg(vector<vector<GLfloat>> egg, vector<vector<GLfloat>> eggNormal) {
     
 }
 
-void changeColors() {
-    for(int i = 0; i < 3; i++) {
-        GLfloat step0 = (light0_colors_dir[i] == 1) ? -0.005 : 0.005;
-        GLfloat step1 = (light1_colors_dir[i] == 1) ? -0.005 : 0.005;
-        light0_colors[i] += step0;
-        light1_colors[i] += step1;
-        if(light0_colors[i] >= 0.995) {
-            light0_colors_dir[i] = 1;
-        } else if(light0_colors[i] <= 0.05) {
-            light0_colors_dir[i] = 0;
-        }
-        if(light1_colors[i] >= 0.995) {
-            light1_colors_dir[i] = 1;
-        } else if(light1_colors[i] <= 0.05) {
-            light1_colors_dir[i] = 0;
-        }
-    }
-    mouse_moved = 0;
-    glutPostRedisplay();
+void drawTriangle() {
+    glColor3f(1.0, 1.0, 1.0);
+    glBegin(GL_TRIANGLES);
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(0.0, 0.0);
+    glVertex3f(0.0, 5.0, 0.0);
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(1.0, 0.0);
+    glVertex3f(0.0, 0.0, 5.0);
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(0.5, 1.0);
+    glVertex3f(0.0, 0.0, -5.0);
+    glEnd();
+}
+
+void drawRect(vector<GLfloat> rotation) {
+    glColor3f(1.0, 1.0, 1.0);
+
+    glPushMatrix();
+
+    glRotatef(rotation[0], 1.0, 0.0, 0.0);
+    glRotatef(rotation[1], 0.0, 1.0, 0.0);
+    glRotatef(rotation[2], 0.0, 0.0, 1.0);
+
+    glBegin(GL_TRIANGLE_STRIP);
+
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(1.0, 0.0);
+    glVertex3f(5.0, -5.0, -5.0);
+
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(1.0, 1.0);
+    glVertex3f(5.0, 5.0, -5.0);
+
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(0.0, 0.0);
+    glVertex3f(5.0, -5.0, 5.0);
+
+    glNormal3f(1.0, 0.0, 0.0);
+    glTexCoord2f(0.0, 1.0);
+    glVertex3f(5.0, 5.0, 5.0);
+
+    glEnd();
+
+    glPopMatrix();
+
+}
+
+void drawCube(){
+    vector<GLfloat> rot1 = {0, 0, 0};
+    vector<GLfloat> rot2 = {0, 0, 90.0};
+    vector<GLfloat> rot3 = {180.0, 0, 180.0};
+    vector<GLfloat> rot4 = {0, 0, -90.0};
+    vector<GLfloat> rot5 = {0, 90.0, 0};
+    vector<GLfloat> rot6 = {0, -90.0, 0};
+
+    drawRect(rot1);
+    drawRect(rot2);
+    drawRect(rot3);
+    drawRect(rot4);
+    drawRect(rot5);
+    drawRect(rot6);
 }
 
 void RenderScene()
 {
+    GLbyte *pBytes;
+    GLint ImWidth, ImHeight, ImComponents;
+    GLenum ImFormat;
+
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -281,46 +532,41 @@ void RenderScene()
 
     glColor3f(1.0f, 1.0f, 1.0f);
 
+    pBytes = LoadTGAImage(texture.c_str(), &ImWidth, &ImHeight, &ImComponents, &ImFormat);
+
+    /*************************************************************************************/
+
+    // Zdefiniowanie tekstury 2-D
+
+    glTexImage2D(GL_TEXTURE_2D, 0, ImComponents, ImWidth, ImHeight, 0, ImFormat, GL_UNSIGNED_BYTE, pBytes);
+
+    /*************************************************************************************/
+
+    // Zwolnienie pamięci
+        
+    free(pBytes);
+
     if(mouse_moved) {
-        if(controlMode == 1 || controlMode == 3) {
-        if(status == 1) {
-            if(controlMode == 1) {
+        if(controlMode == 1) {
+            if(status == 1) {
                 theta += delta_x*pix2angle/25;
                 phi += delta_y*pix2angle/25;
-            } else {
-                angles_L0[0] += delta_x*pix2angle/25;
-                angles_L1[0] += delta_x*pix2angle/25;
-                angles_L0[1] += delta_y*pix2angle/25;
-                angles_L1[1] += delta_y*pix2angle/25;
+            } else if(status == 2) {
+                R -= delta_z*0.05;
+                if(R < 5.0) {
+                    R = 5.0;
+                } else if(R > 15.0) {
+                    R = 15.0;
+                }
             }
-            
-        } else if(status == 2) {
-            R -= delta_z*0.05;
-            if(R < 5.0) {
-                R = 5.0;
-            } else if(R > 30.0) {
-                R = 30.0;
-            }
-        }
 
-        theta = fmod(theta, M_PI*2);
-        phi = fmod(phi, M_PI*2);
+            theta = fmod(theta, M_PI*2);
+            phi = fmod(phi, M_PI*2);
 
-        if(controlMode == 3) {
-            light0_position[0] = xl_s(angles_L0, 10.0);
-            light1_position[0] = xl_s(angles_L1, 0.0);
-            light0_position[1] = yl_s(angles_L0, 0.0);
-            light1_position[1] = yl_s(angles_L1, 10.0);
-            light0_position[2] = zl_s(angles_L0, 10.0);
-            light1_position[2] = zl_s(angles_L1, 10.0);
-        }
-        
-
-        
-        if(controlMode == 1) {
             viewer[0] = x_s();
             viewer[1] = y_s();
             viewer[2] = z_s();
+
             GLfloat phiRad = fmod(phi*M_PI, M_PI*2);
             if(
                 (phiRad > M_PI/2 && phiRad < M_PI*3/2) ||
@@ -331,23 +577,22 @@ void RenderScene()
             } else {
                 upY = 1.0;
             }
-        }
-    } else if(controlMode == 2) {
-        if(status == 1) {
-            lookAtVector[0] += delta_x*pix2angle;
-            lookAtVector[1] += delta_y*pix2angle;
+        } else if(controlMode == 2) {
+            if(status == 1) {
+                lookAtVector[0] += delta_x*pix2angle;
+                lookAtVector[1] += delta_y*pix2angle;
+            } else {
+                lookAtVector[2] += delta_z*pix2angle;
+            }
         } else {
-            lookAtVector[2] += delta_z*pix2angle;
+            if(status == 1) {
+                theta_o += delta_x*pix2angle;
+                phi_o += delta_y*pix2angle;
+            } else if(status == 2) {
+                zoom += delta_z*0.02;
+            }
+            
         }
-    } else {
-        if(status == 1) {
-            theta_o += delta_x*pix2angle;
-            phi_o += delta_y*pix2angle;
-        } else if(status == 2) {
-            zoom += delta_z*0.02;
-        }
-        
-    }
 
     }
     
@@ -357,28 +602,24 @@ void RenderScene()
     glRotatef(phi_o, 1.0, 0.0, 0.0);
     glScalef(zoom, zoom, zoom);
 
-    drawEgg(createEgg(), createEggNormal());
+    switch(drawFlag) {
+        case 0:
+            drawTriangle();
+            break;
+        case 1:
+            drawCube();
+            break;
+        case 2:
+            drawEgg(createEgg(), createEggNormal());
+            break;
+    }
   
     glPopMatrix();
     glPushMatrix();
     glLightfv(GL_LIGHT0, GL_POSITION, light0_position);
     glPopMatrix();
-    glPushMatrix();
-    glLightfv(GL_LIGHT1, GL_POSITION, light1_position);
-    glPopMatrix();
     glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_colors);
     glLightfv(GL_LIGHT0, GL_SPECULAR, light0_colors);
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colors);
-    glLightfv(GL_LIGHT1, GL_SPECULAR, light1_colors);
-
-    glPushMatrix();
-    glTranslatef(light0_position[0], light0_position[1], light0_position[2]);
-    glColor3fv(light0_colors);
-    glutSolidTeapot(0.5);
-    glPopMatrix();
-    glTranslatef(light1_position[0], light1_position[1], light1_position[2]);
-    glColor3fv(light1_colors);
-    glutSolidTeapot(0.5);
 
     glFlush();
 
@@ -386,12 +627,7 @@ void RenderScene()
 }
 
 void MyInit() {
-    light0_position[0] = xl_s(angles_L0, 10.0);
-    light1_position[0] = xl_s(angles_L1, 0.0);
-    light0_position[1] = yl_s(angles_L0, 0.0);
-    light1_position[1] = yl_s(angles_L1, 10.0);
-    light0_position[2] = zl_s(angles_L0, 10.0);
-    light1_position[2] = zl_s(angles_L1, 10.0);
+    
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     /*************************************************************************************/
 
@@ -493,26 +729,59 @@ void MyInit() {
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, att_linear);
     glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, att_quadratic);
 
-    glLightfv(GL_LIGHT1, GL_AMBIENT, light_ambient2);
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colors);
-    glLightfv(GL_LIGHT1, GL_SPECULAR, light1_colors);
-    glLightfv(GL_LIGHT1, GL_POSITION, light1_position);
-
-    glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, att_constant2);
-    glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, att_linear2);
-    glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, att_quadratic2);
-
 
 /*************************************************************************************/
 // Ustawienie opcji systemu oświetlania sceny
 
     glShadeModel(GL_SMOOTH); // właczenie łagodnego cieniowania
-    glEnable(GL_LIGHTING);   // właczenie systemu oświetlenia sceny
+    //glEnable(GL_LIGHTING);   // właczenie systemu oświetlenia sceny
     glEnable(GL_LIGHT0);     // włączenie źródła o numerze 0
-    glEnable(GL_LIGHT1);
     glEnable(GL_DEPTH_TEST); // włączenie mechanizmu z-bufora
 
 /*************************************************************************************/
+
+/*************************************************************************************/
+
+    // Teksturowanie będzie prowadzone tyko po jednej stronie ściany
+
+    glEnable(GL_CULL_FACE);
+
+    /*************************************************************************************/
+
+    //  Przeczytanie obrazu tekstury z pliku o nazwie tekstura.tga
+
+    //pBytes = LoadTGAImage("tekstura.tga", &ImWidth, &ImHeight, &ImComponents, &ImFormat);
+
+    /*************************************************************************************/
+
+    // Zdefiniowanie tekstury 2-D
+
+    //glTexImage2D(GL_TEXTURE_2D, 0, ImComponents, ImWidth, ImHeight, 0, ImFormat, GL_UNSIGNED_BYTE, pBytes);
+
+    /*************************************************************************************/
+
+    // Zwolnienie pamięci
+        
+    //free(pBytes);
+
+    /*************************************************************************************/
+
+    // Włączenie mechanizmu teksturowania
+
+    glEnable(GL_TEXTURE_2D);
+
+    /*************************************************************************************/
+
+    // Ustalenie trybu teksturowania
+
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+    /*************************************************************************************/
+
+    // Określenie sposobu nakładania tekstur
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 }
 
 void ChangeSize(GLsizei horizontal, GLsizei vertical)
@@ -540,13 +809,13 @@ int main(int argc, char *argv[])
     glutInit( & argc, argv );
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(1440, 900);
-    glutCreateWindow("Oświetlenie");
+    glutCreateWindow("Tekstury");
     glutDisplayFunc(RenderScene);
     glutReshapeFunc(ChangeSize);
     glutMouseFunc(Mouse);
     glutMotionFunc(Motion);
     glutKeyboardFunc(Keyboard);
-    glutIdleFunc(changeColors);
+    //glutIdleFunc(changeColors);
 
     MyInit();
 
