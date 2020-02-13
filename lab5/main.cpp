@@ -305,14 +305,11 @@ void Keyboard(unsigned char key, int x, int y) {
             glutPostRedisplay();
             break;
         case 'k':
-            drawFlag += 1;
-            if(drawFlag >= 3) {
-                drawFlag = 0;
-            }
+            drawFlag = (drawFlag + 1) % 3;
             glutPostRedisplay();
             break;
         case 'b':
-            texture = "biernat.tga";
+            texture = "pwr_special.tga";
             glutSetWindowTitle("BIERNACENIE");
             glutPostRedisplay();
             break;

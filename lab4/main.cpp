@@ -133,7 +133,7 @@ void Keyboard(unsigned char key, int x, int y) {
         case 'm':
             controlMode = (controlMode == 2) ? 0 : 2;
             break;
-        case 'c':
+        case 'l':
             controlMode = (controlMode == 3) ? 0 : 3;
             break;
     }
@@ -373,11 +373,9 @@ void RenderScene()
 
     glPushMatrix();
     glTranslatef(light0_position[0], light0_position[1], light0_position[2]);
-    glColor3fv(light0_colors);
     glutSolidTeapot(0.5);
     glPopMatrix();
     glTranslatef(light1_position[0], light1_position[1], light1_position[2]);
-    glColor3fv(light1_colors);
     glutSolidTeapot(0.5);
 
     glFlush();
